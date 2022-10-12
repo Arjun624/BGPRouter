@@ -2,11 +2,28 @@
 
 import argparse, socket, time, json, select, struct, sys, math
 
-class Router:
 
+class Router:
     relations = {}
     sockets = {}
     ports = {}
+    table = {}
+
+    def processMsg(self, msg):
+        dic = json.loads(msg)
+        print(dic)
+        if dic['type'] == "update":
+            self.table[dic['src']] = dic['msg']
+            temp = dic['msg']
+            del temp['localpref']
+            del temp['origin']
+            del temp['selfOrigin']
+            temp['ASPath'].insert(0, self.asn)
+            for neighbors in self.relations:
+                self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                         'network': temp['network']}, 'src': dic['src'],
+                                                 'dst': neighbors, 'type': 'update'}))
+    #{'msg': {'netmask': '255.255.0.0', 'ASPath': [14, 2], 'network': '172.168.0.0'}, 'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update'}
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
@@ -18,7 +35,8 @@ class Router:
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
             self.relations[neighbor] = relation
-            self.send(neighbor, json.dumps({ "type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}  }))
+            self.send(neighbor,
+                      json.dumps({"type": "handshake", "src": self.our_addr(neighbor), "dst": neighbor, "msg": {}}))
 
     def our_addr(self, dst):
         quads = list(int(qdn) for qdn in dst.split('.'))
@@ -41,7 +59,10 @@ class Router:
                 msg = k.decode('utf-8')
 
                 print("Received message '%s' from %s" % (msg, srcif))
+                self.processMsg(msg)
+
         return
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
