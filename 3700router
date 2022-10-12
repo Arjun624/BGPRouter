@@ -39,10 +39,11 @@ class Router:
                     peer.append(net)
                     break
             if len(peer) == 0:
-                self.send(dic['src'], json.dumps({'src': self.our_addr(0), 'dst': dic['src'], 'type': 'no route',
+                self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
                                                   'msg': {}}))
             elif len(peer) == 1:
-                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                                       'dst': dic['dst']}))
 
             else:
                 temp = []
@@ -68,61 +69,61 @@ class Router:
                                 temp.append(peer[z])
                             peer = temp
 
-                            if len(peer) == 1:
-                                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
-                            else:
-                                temp = []
-                                maxes = []
-                                for p in range(len(peer)):
-                                    maxes.append(p['selfOrigin'])
-                                if maxes.count(True) > 1:
-                                    indices = [j for j, y in enumerate(maxes) if y == True]
-                                    for z in indices:
-                                        temp.append(peer[z])
-                                    peer = temp
+                        if len(peer) == 1:
+                            self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                        else:
+                            temp = []
+                            maxes = []
+                            for p in range(len(peer)):
+                                maxes.append(p['selfOrigin'])
+                            if maxes.count(True) > 1:
+                                indices = [j for j, y in enumerate(maxes) if y == True]
+                                for z in indices:
+                                    temp.append(peer[z])
+                                peer = temp
 
-                                    if len(peer) == 1:
-                                        self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
-                                    else:
-                                        temp = []
-                                        maxes = []
-                                        for p in range(len(peer)):
-                                            maxes.append(len(p['ASPath']))
-                                        if maxes.count(min(maxes)) > 1:
-                                            indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
-                                            for z in indices:
-                                                temp.append(peer[z])
-                                            peer = temp
+                                if len(peer) == 1:
+                                    self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                                else:
+                                    temp = []
+                                    maxes = []
+                                    for p in range(len(peer)):
+                                        maxes.append(len(p['ASPath']))
+                                    if maxes.count(min(maxes)) > 1:
+                                        indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
+                                        for z in indices:
+                                            temp.append(peer[z])
+                                        peer = temp
 
-                                            if len(peer) == 1:
-                                                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
-                                            else:
-                                                temp = []
-                                                maxes = []
-                                                for p in range(len(peer)):
-                                                    maxes.append(p['origin'])
-                                                if maxes.count('IGP') > 1:
-                                                    indices = [j for j, y in enumerate(maxes) if y == 'IGP']
+                                        if len(peer) == 1:
+                                            self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                                        else:
+                                            temp = []
+                                            maxes = []
+                                            for p in range(len(peer)):
+                                                maxes.append(p['origin'])
+                                            if maxes.count('IGP') > 1:
+                                                indices = [j for j, y in enumerate(maxes) if y == 'IGP']
+                                                for z in indices:
+                                                    temp.append(peer[z])
+                                                peer = temp
+                                            elif maxes.count('IGP') == 0:
+                                                if maxes.count('EGP') > 1:
+                                                    indices = [j for j, y in enumerate(maxes) if y == 'EGP']
                                                     for z in indices:
                                                         temp.append(peer[z])
                                                     peer = temp
-                                                elif maxes.count('IGP') == 0:
-                                                    if maxes.count('EGP') > 1:
-                                                        indices = [j for j, y in enumerate(maxes) if y == 'EGP']
-                                                        for z in indices:
-                                                            temp.append(peer[z])
-                                                        peer = temp
-                                                    elif maxes.count('EGP') == 0:
-                                                        if len(peer) == 1:
-                                                            self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
-                                                        else:
-                                                            for p in peer:
-                                                                quads = p['peer'].split('.')
-                                                                maxes.append(
-                                                                    (int(quads[0]) << 24) + (int(quads[1]) << 16) +
-                                                                    (int(quads[2]) << 8) + int(quads[3]))
-                                                            self.send(peer[peer.index(max(peer))]['peer'],
-                                                                      json.dumps(dic['msg']))
+                                                elif maxes.count('EGP') == 0:
+                                                    if len(peer) == 1:
+                                                        self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                                                    else:
+                                                        for p in peer:
+                                                            quads = p['peer'].split('.')
+                                                            maxes.append(
+                                                                (int(quads[0]) << 24) + (int(quads[1]) << 16) +
+                                                                (int(quads[2]) << 8) + int(quads[3]))
+                                                        self.send(peer[peer.index(max(peer))]['peer'],
+                                                                  json.dumps(dic['msg']))
 
 
     def __init__(self, asn, connections):
