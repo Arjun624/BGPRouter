@@ -42,7 +42,7 @@ class Router:
                 self.send(dic['src'], json.dumps({'src': self.our_addr(0), 'dst': dic['src'], 'type': 'no route',
                                                   'msg': {}}))
             elif len(peer) == 1:
-                self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
 
             else:
                 temp = []
@@ -56,7 +56,7 @@ class Router:
                     peer = temp
 
                     if len(peer) == 1:
-                        self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                        self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
                     else:
                         temp = []
                         maxes = []
@@ -69,7 +69,7 @@ class Router:
                             peer = temp
 
                             if len(peer) == 1:
-                                self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
                             else:
                                 temp = []
                                 maxes = []
@@ -82,7 +82,7 @@ class Router:
                                     peer = temp
 
                                     if len(peer) == 1:
-                                        self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                                        self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
                                     else:
                                         temp = []
                                         maxes = []
@@ -95,7 +95,7 @@ class Router:
                                             peer = temp
 
                                             if len(peer) == 1:
-                                                self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                                                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
                                             else:
                                                 temp = []
                                                 maxes = []
@@ -114,7 +114,7 @@ class Router:
                                                         peer = temp
                                                     elif maxes.count('EGP') == 0:
                                                         if len(peer) == 1:
-                                                            self.send(peer[0]['peer'], json.dumps(dic['msg']))
+                                                            self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
                                                         else:
                                                             for p in peer:
                                                                 quads = p['peer'].split('.')
