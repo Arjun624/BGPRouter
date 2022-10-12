@@ -16,7 +16,7 @@ class Router:
             self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
                                'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
                                'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
-            temp = dic['msg']
+            temp = dic['msg'].copy()
             del temp['localpref']
             del temp['origin']
             del temp['selfOrigin']
@@ -28,9 +28,12 @@ class Router:
                                                      'dst': neighbors, 'type': 'update'}))
         if dic['type'] == "dump":
             for neighbors in self.relations:
-                if dic['src'] != neighbors:
-                    self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
-                                             'msg': self.table}))
+                self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
+                                         'msg': self.table}))
+
+        # if dic['type'] == "data":
+        #     self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
+        #                              'msg': self.table}))
 
 
     def __init__(self, asn, connections):
