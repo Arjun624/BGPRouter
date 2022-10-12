@@ -7,23 +7,31 @@ class Router:
     relations = {}
     sockets = {}
     ports = {}
-    table = {}
+    table = []
 
     def processMsg(self, msg):
         dic = json.loads(msg)
         print(dic)
         if dic['type'] == "update":
-            self.table[dic['src']] = dic['msg']
+            self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
+                               'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
+                               'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
             temp = dic['msg']
             del temp['localpref']
             del temp['origin']
             del temp['selfOrigin']
             temp['ASPath'].insert(0, self.asn)
             for neighbors in self.relations:
-                self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
-                                                         'network': temp['network']}, 'src': dic['src'],
-                                                 'dst': neighbors, 'type': 'update'}))
-    #{'msg': {'netmask': '255.255.0.0', 'ASPath': [14, 2], 'network': '172.168.0.0'}, 'src': '192.168.0.1', 'dst': '192.168.0.2', 'type': 'update'}
+                if dic['src'] != neighbors:
+                    self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                             'network': temp['network']}, 'src': self.our_addr(neighbors),
+                                                     'dst': neighbors, 'type': 'update'}))
+        if dic['type'] == "dump":
+            for neighbors in self.relations:
+                if dic['src'] != neighbors:
+                    self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
+                                             'msg': self.table}))
+
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
