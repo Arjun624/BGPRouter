@@ -27,21 +27,44 @@ class Router:
                                                              'network': temp['network']},
                                                      'src': self.our_addr(neighbors),
                                                      'dst': neighbors, 'type': 'update'}))
+        if dic['type'] == "withdraw":
+            for x in self.table:
+                for y in dic['msg']:
+                    if x['peer'] == dic['src'] and x['network'] == y['network']:
+                        self.table.remove(x)
+            for neighbors in self.relations:
+                if dic['src'] != neighbors:
+                    self.send(neighbors, json.dumps({'msg': dic['msg'],
+                                                     'src': self.our_addr(neighbors),
+                                                     'dst': neighbors, 'type': 'withdraw'}))
         if dic['type'] == "dump":
             for neighbors in self.relations:
                 self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
                                                  'msg': self.table}))
 
         if dic['type'] == "data":
+
             peer = []
+            srcCheck = False
+            dstCheck = False
+            print('-----------------------------------------------------')
+            print(self.table)
+            print('-----------------------------------------------------')
             for net in self.table:
                 if dic['dst'][0: dic['dst'].find('.')] in net['network']:
                     peer.append(net)
-            # print("----------------------------------------")
-            # print(peer)
-            # print("--------------table----------------")
-            # print(self.table)
-            # print("----------------------------------------")
+                if dic['src'] == net['peer']:
+                    print('src True-----------------------------------------')
+                    srcCheck = True
+                if dic['dst'] == net['peer']:
+                    print('dst True-----------------------------------------')
+                    dstCheck = True
+                if dstCheck and srcCheck:
+                    print("Success --------------------------------------------------------------------------")
+                    self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
+                                                      'msg': {}}))
+                    return
+            print('return does not work--------------------------------------------')
             if len(peer) == 0:
                 self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
                                                   'msg': {}}))
