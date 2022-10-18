@@ -25,12 +25,13 @@ class Router:
             for neighbors in self.relations:
                 if dic['src'] != neighbors:
                     self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
-                                                             'network': temp['network']}, 'src': self.our_addr(neighbors),
+                                                             'network': temp['network']},
+                                                     'src': self.our_addr(neighbors),
                                                      'dst': neighbors, 'type': 'update'}))
         if dic['type'] == "dump":
             for neighbors in self.relations:
                 self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
-                                         'msg': self.table}))
+                                                 'msg': self.table}))
 
         if dic['type'] == "data":
             peer = []
@@ -124,7 +125,6 @@ class Router:
                                                                 (int(quads[2]) << 8) + int(quads[3]))
                                                         self.send(peer[peer.index(max(peer))]['peer'],
                                                                   json.dumps(dic['msg']))
-
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
