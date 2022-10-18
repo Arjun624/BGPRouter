@@ -53,7 +53,7 @@ class Router:
                 maxes = []
                 for p in peer:
                     maxes.append(SequenceMatcher(None, p['network'], dic['dst']).ratio())
-                    indices = [j for j, y in enumerate(maxes) if y == max(maxes)]
+                indices = [j for j, y in enumerate(maxes) if y == max(maxes)]
                 for z in indices:
                     temp.append(peer[z])
                 peer = temp
