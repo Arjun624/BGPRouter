@@ -9,16 +9,94 @@ class Router:
     sockets = {}
     ports = {}
     table = []
+    messages = []
+
+    def aggregate(self):
+        for net in self.table:
+            ip1 = net['network'].split(".")
+            for check in self.table:
+                ip2 = check['network'].split(".")
+                if (net['peer'] == check['peer'] and net['localpref'] == check['localpref']
+                    and net['ASPath'] == check['ASPath'] and net['selfOrigin'] == check['selfOrigin'] and net['origin'] == check['origin']):
+                    if ip1[0] == ip2[0] and ip1[1] == ip2[1] and ip1[3] == "0" and ip2[3] == "0":
+                        mask = check['netmask'].split(".")
+                        if (int(ip2[2]) + (abs(int(mask[2]) - 255) + 1)) == int(ip1[2]):
+                            self.table.remove(net)
+                            if mask[3] == "0":
+                                if mask[2] == "0":
+                                    if mask[1] == "0":
+                                        if mask[0] == "0":
+                                            check['netmask'] = "0.0.0.0"
+                                        else:
+                                            check['netmask'] = str(int(mask[0]) - 1) + ".0.0.0"
+
+                                    else:
+                                        check['netmask'] = mask[0] + "." + str(int(mask[1])- 1) + ".0.0"
+                                else:
+                                    check['netmask'] = mask[0] + "." + mask[1] + "." + str(int(mask[2]) - 1) + ".0"
+                            else:
+                                check['netmask'] = mask[0] + "." + mask[1] + "." + mask[2] + "." + str(int(mask[3]) - 1)
+
+
+
+
+
+
+
+                    # count = 0
+                    # for i in (0, 1, 3):
+                    #     print(ip1[i] + "!=" + ip2[i])
+                    #     if ip1[i] == ip2[i]:
+                    #         count += 1
+                    # if count == 3 and (int(ip1[2]) - int(ip2[2]) == 1) and ip1[3] == 0:
+                    #
+                    #     print("-------------------------------------")
+                    #     self.table.remove(check)
+                    #     net['netmask'] = [int(z) for z in net['netmask'].split(".")]
+                    #     for x in (3, 2, 1, 0):
+                    #         if net['netmask'][x] != 0:
+                    #             net['netmask'][x] -= 1
+                    #             break
+                    #     net['netmask'] = '.'.join(net['netmask'])
+                    #     break
+
+    def disaggregate(self):
+        temp = []
+        for i in self.messages:
+            if i['type'] == "update":
+                temp.append({'network': i['msg']['network'], 'netmask': i['msg']['netmask'], 'peer': i['src'],
+                                   'localpref': i['msg']['localpref'], 'ASPath': i['msg']['ASPath'],
+                                   'selfOrigin': i['msg']['selfOrigin'], 'origin': i['msg']['origin']})
+                self.table = temp
+            if i['type'] == "withdraw":
+                for x in self.table:
+                    for y in i['msg']:
+                        if x['peer'] == i['src'] and x['network'] == y['network']:
+                            self.table.remove(x)
+        self.aggregate()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def processMsg(self, msg, srcif):
         dic = json.loads(msg)
         if dic['type'] == "update":
-            print('--------------------------------------')
-            print(self.relations)
+            self.messages.append(dic)
             self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
                                'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
                                'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
-
+            self.aggregate()
             temp = copy.deepcopy(dic['msg'])
             del temp['localpref']
             del temp['origin']
@@ -41,10 +119,12 @@ class Router:
                                                          'src': self.our_addr(customers),
                                                          'dst': customers, 'type': 'update'}))
         if dic['type'] == "withdraw":
+            self.messages.append(dic)
             for x in self.table:
                 for y in dic['msg']:
                     if x['peer'] == dic['src'] and x['network'] == y['network']:
                         self.table.remove(x)
+            self.disaggregate()
             for neighbors in self.relations:
                 if dic['src'] != neighbors:
                     self.send(neighbors, json.dumps({'msg': dic['msg'],
@@ -61,10 +141,8 @@ class Router:
             for net in self.table:
                 if dic['dst'][0: dic['dst'].find('.')] in net['network']:
                     peer.append(net)
-            if len(peer) == 0:
-                self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
-                                                  'msg': {}}))
-            elif len(peer) == 1:
+
+            if len(peer) == 1:
                 if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (self.relations[
                     peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
                     self.send(peer[0]['peer'],
