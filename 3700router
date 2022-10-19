@@ -18,6 +18,7 @@ class Router:
             self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
                                'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
                                'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
+
             temp = copy.deepcopy(dic['msg'])
             del temp['localpref']
             del temp['origin']
