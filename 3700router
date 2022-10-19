@@ -10,9 +10,11 @@ class Router:
     ports = {}
     table = []
 
-    def processMsg(self, msg):
+    def processMsg(self, msg, srcif):
         dic = json.loads(msg)
         if dic['type'] == "update":
+            print('--------------------------------------')
+            print(self.relations)
             self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
                                'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
                                'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
@@ -21,12 +23,22 @@ class Router:
             del temp['origin']
             del temp['selfOrigin']
             temp['ASPath'].insert(0, self.asn)
-            for neighbors in self.relations:
-                if dic['src'] != neighbors:
-                    self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
-                                                             'network': temp['network']},
-                                                     'src': self.our_addr(neighbors),
-                                                     'dst': neighbors, 'type': 'update'}))
+            if self.relations[dic['src']] == "cust":
+                for neighbors in self.relations:
+                    if dic['src'] != neighbors:
+                        self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                                 'network': temp['network']},
+                                                         'src': self.our_addr(neighbors),
+                                                         'dst': neighbors, 'type': 'update'}))
+            else:
+                for customers in self.relations:
+                    if dic['src'] != customers and self.relations[customers] == "cust":
+                        print("worked")
+                        print(self.relations[customers])
+                        self.send(customers, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                                 'network': temp['network']},
+                                                         'src': self.our_addr(customers),
+                                                         'dst': customers, 'type': 'update'}))
         if dic['type'] == "withdraw":
             for x in self.table:
                 for y in dic['msg']:
@@ -43,34 +55,21 @@ class Router:
                                                  'msg': self.table}))
 
         if dic['type'] == "data":
-
             peer = []
-            srcCheck = False
-            dstCheck = False
-            print('-----------------------------------------------------')
-            print(self.table)
-            print('-----------------------------------------------------')
+
             for net in self.table:
                 if dic['dst'][0: dic['dst'].find('.')] in net['network']:
                     peer.append(net)
-                if dic['src'] == net['peer']:
-                    print('src True-----------------------------------------')
-                    srcCheck = True
-                if dic['dst'] == net['peer']:
-                    print('dst True-----------------------------------------')
-                    dstCheck = True
-                if dstCheck and srcCheck:
-                    print("Success --------------------------------------------------------------------------")
-                    self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
-                                                      'msg': {}}))
-                    return
-            print('return does not work--------------------------------------------')
             if len(peer) == 0:
                 self.send(dic['src'], json.dumps({'src': dic['src'], 'dst': dic['dst'], 'type': 'no route',
                                                   'msg': {}}))
             elif len(peer) == 1:
-                self.send(peer[0]['peer'], json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                                       'dst': dic['dst']}))
+                if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (self.relations[
+                    peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
+                    self.send(peer[0]['peer'],
+                              json.dumps(
+                                  {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                   'dst': dic['dst']}))
             else:
                 temp = []
                 maxes = []
@@ -82,8 +81,13 @@ class Router:
                 peer = temp
 
                 if len(peer) == 1:
-                    self.send(peer[0]['peer'],
-                              json.dumps({'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                    if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
+                            self.relations[
+                                peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
+                        self.send(peer[0]['peer'],
+                                  json.dumps(
+                                      {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                       'dst': dic['dst']}))
                 else:
                     temp = []
                     maxes = []
@@ -95,8 +99,14 @@ class Router:
                         temp.append(peer[z])
                     peer = temp
                     if len(peer) == 1:
-                        self.send(peer[0]['peer'], json.dumps(
-                            {'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                        if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
+                                self.relations[
+                                    peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
+                            self.send(peer[0]['peer'],
+                                      json.dumps(
+                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                           'dst': dic['dst']}))
+
 
                     else:
                         temp = []
@@ -110,8 +120,13 @@ class Router:
                             peer = temp
 
                         if len(peer) == 1:
-                            self.send(peer[0]['peer'], json.dumps(
-                                {'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                            if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
+                                    self.relations[
+                                        peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
+                                self.send(peer[0]['peer'],
+                                          json.dumps(
+                                              {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                               'dst': dic['dst']}))
                         else:
                             temp = []
                             maxes = []
@@ -124,8 +139,14 @@ class Router:
                             peer = temp
 
                             if len(peer) == 1:
-                                self.send(peer[0]['peer'], json.dumps(
-                                    {'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                                if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
+                                        self.relations[
+                                            peer[0]['peer']] == "peer" or self.relations[
+                                            peer[0]['peer']] == "prov")):
+                                    self.send(peer[0]['peer'],
+                                              json.dumps(
+                                                  {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                                   'dst': dic['dst']}))
                             else:
                                 temp = []
                                 maxes = []
@@ -138,8 +159,14 @@ class Router:
                                         temp.append(peer[z])
                                     peer = temp
                                 if len(peer) == 1:
-                                    self.send(peer[0]['peer'], json.dumps(
-                                        {'type': 'data', 'msg': dic['msg'], 'src': dic['src'], 'dst': dic['dst']}))
+                                    if not ((self.relations[srcif] == "peer" or self.relations[
+                                        srcif] == "prov") and (self.relations[
+                                                                       peer[0]['peer']] == "peer" or self.relations[
+                                                                       peer[0]['peer']] == "prov")):
+                                        self.send(peer[0]['peer'],
+                                                  json.dumps(
+                                                      {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                                       'dst': dic['dst']}))
                                 else:
                                     if maxes.count('EGP') > 0:
                                         indices = [j for j, y in enumerate(maxes) if y == 'EGP']
@@ -147,9 +174,14 @@ class Router:
                                             temp.append(peer[z])
                                         peer = temp
                                     if len(peer) == 1:
-                                        self.send(peer[0]['peer'], json.dumps(
-                                            {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                             'dst': dic['dst']}))
+                                        if not ((self.relations[srcif] == "peer" or self.relations[
+                                            srcif] == "prov") and (self.relations[
+                                                                           peer[0]['peer']] == "peer" or self.relations[
+                                                                           peer[0]['peer']] == "prov")):
+                                            self.send(peer[0]['peer'],
+                                                      json.dumps(
+                                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                                           'dst': dic['dst']}))
                                     else:
                                         maxes = []
                                         temp = []
@@ -162,9 +194,13 @@ class Router:
                                         for z in indices:
                                             temp.append(peer[z])
                                         peer = temp
-                                        self.send(peer[0]['peer'], json.dumps(
-                                            {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                             'dst': dic['dst']}))
+                                        if not (self.relations[srcif] == "peer" or self.relations[
+                                            srcif] == "prov" and self.relations[peer[0]['peer']] == "peer" or
+                                                self.relations[peer[0]['peer']] == "prov"):
+                                            self.send(peer[0]['peer'],
+                                                      json.dumps(
+                                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                                                           'dst': dic['dst']}))
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
@@ -201,7 +237,7 @@ class Router:
                 msg = k.decode('utf-8')
 
                 print("Received message '%s' from %s" % (msg, srcif))
-                self.processMsg(msg)
+                self.processMsg(msg, srcif)
 
         return
 
