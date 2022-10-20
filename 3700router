@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math, copy
+import argparse, socket, json, select, copy
 from difflib import SequenceMatcher
 
 
@@ -112,14 +112,14 @@ class Router:
                                                  'src': self.our_addr(neighbors),
                                                  'dst': neighbors, 'type': 'withdraw'}))
 
-    # Handles the forwarding of our routing table to this routers neighbors.
-    def dump(self, dic):
+    # Handles the forwarding of our routing table to this router's neighbors.
+    def dump(self):
         for neighbors in self.relations:
             self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
                                              'msg': self.table}))
 
     # Handles data messages by checking for the best route in our forwarding table to send the data on by comparing
-    # their attributes. Also makes sure that the we are forwarding messages for paying customers exclusively.
+    # their attributes. Also makes sure that we are forwarding messages for paying customers exclusively.
     def data(self, dic, srcif):
         peer = []
 
@@ -225,7 +225,7 @@ class Router:
             self.withdraw(dic)
 
         if dic['type'] == "dump":
-            self.dump(dic)
+            self.dump()
 
         if dic['type'] == "data":
             self.data(dic, srcif)
