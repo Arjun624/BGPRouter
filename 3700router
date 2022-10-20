@@ -11,13 +11,27 @@ class Router:
     table = []
     messages = []
 
+    # Abstracted process of checking whether the next hop we are about to forward data to is a customer or a peer. As
+    # well as checking the src we received the data from. Confirming we are forwarding messages for paying customers
+    # exclusively.
+    def checkPeer(self, peer, dic, srcif):
+        if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov")
+                and (self.relations[peer[0]['peer']] == "peer"
+                     or self.relations[peer[0]['peer']] == "prov")):
+            self.send(peer[0]['peer'],
+                      json.dumps(
+                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
+                           'dst': dic['dst']}))
+
+    # Aggregates the current forwarding table into it's simplest form.
     def aggregate(self):
         for net in self.table:
             ip1 = net['network'].split(".")
             for check in self.table:
                 ip2 = check['network'].split(".")
                 if (net['peer'] == check['peer'] and net['localpref'] == check['localpref']
-                    and net['ASPath'] == check['ASPath'] and net['selfOrigin'] == check['selfOrigin'] and net['origin'] == check['origin']):
+                        and net['ASPath'] == check['ASPath'] and net['selfOrigin'] == check['selfOrigin'] and net[
+                            'origin'] == check['origin']):
                     if ip1[0] == ip2[0] and ip1[1] == ip2[1] and ip1[3] == "0" and ip2[3] == "0":
                         mask = check['netmask'].split(".")
                         if (int(ip2[2]) + (abs(int(mask[2]) - 255) + 1)) == int(ip1[2]):
@@ -29,44 +43,22 @@ class Router:
                                             check['netmask'] = "0.0.0.0"
                                         else:
                                             check['netmask'] = str(int(mask[0]) - 1) + ".0.0.0"
-
                                     else:
-                                        check['netmask'] = mask[0] + "." + str(int(mask[1])- 1) + ".0.0"
+                                        check['netmask'] = mask[0] + "." + str(int(mask[1]) - 1) + ".0.0"
                                 else:
                                     check['netmask'] = mask[0] + "." + mask[1] + "." + str(int(mask[2]) - 1) + ".0"
                             else:
                                 check['netmask'] = mask[0] + "." + mask[1] + "." + mask[2] + "." + str(int(mask[3]) - 1)
 
-
-
-
-
-
-
-                    # count = 0
-                    # for i in (0, 1, 3):
-                    #     print(ip1[i] + "!=" + ip2[i])
-                    #     if ip1[i] == ip2[i]:
-                    #         count += 1
-                    # if count == 3 and (int(ip1[2]) - int(ip2[2]) == 1) and ip1[3] == 0:
-                    #
-                    #     print("-------------------------------------")
-                    #     self.table.remove(check)
-                    #     net['netmask'] = [int(z) for z in net['netmask'].split(".")]
-                    #     for x in (3, 2, 1, 0):
-                    #         if net['netmask'][x] != 0:
-                    #             net['netmask'][x] -= 1
-                    #             break
-                    #     net['netmask'] = '.'.join(net['netmask'])
-                    #     break
-
+    # Takes all the messages the router has received and recreates the routing table. It then aggregates this new
+    # routing table.
     def disaggregate(self):
         temp = []
         for i in self.messages:
             if i['type'] == "update":
                 temp.append({'network': i['msg']['network'], 'netmask': i['msg']['netmask'], 'peer': i['src'],
-                                   'localpref': i['msg']['localpref'], 'ASPath': i['msg']['ASPath'],
-                                   'selfOrigin': i['msg']['selfOrigin'], 'origin': i['msg']['origin']})
+                             'localpref': i['msg']['localpref'], 'ASPath': i['msg']['ASPath'],
+                             'selfOrigin': i['msg']['selfOrigin'], 'origin': i['msg']['origin']})
                 self.table = temp
             if i['type'] == "withdraw":
                 for x in self.table:
@@ -75,211 +67,168 @@ class Router:
                             self.table.remove(x)
         self.aggregate()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def processMsg(self, msg, srcif):
-        dic = json.loads(msg)
-        if dic['type'] == "update":
-            self.messages.append(dic)
-            self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
-                               'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
-                               'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
-            self.aggregate()
-            temp = copy.deepcopy(dic['msg'])
-            del temp['localpref']
-            del temp['origin']
-            del temp['selfOrigin']
-            temp['ASPath'].insert(0, self.asn)
-            if self.relations[dic['src']] == "cust":
-                for neighbors in self.relations:
-                    if dic['src'] != neighbors:
-                        self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
-                                                                 'network': temp['network']},
-                                                         'src': self.our_addr(neighbors),
-                                                         'dst': neighbors, 'type': 'update'}))
-            else:
-                for customers in self.relations:
-                    if dic['src'] != customers and self.relations[customers] == "cust":
-                        print("worked")
-                        print(self.relations[customers])
-                        self.send(customers, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
-                                                                 'network': temp['network']},
-                                                         'src': self.our_addr(customers),
-                                                         'dst': customers, 'type': 'update'}))
-        if dic['type'] == "withdraw":
-            self.messages.append(dic)
-            for x in self.table:
-                for y in dic['msg']:
-                    if x['peer'] == dic['src'] and x['network'] == y['network']:
-                        self.table.remove(x)
-            self.disaggregate()
+    # Handles the updating of our forwarding table as well as forwarding these updates to the routers neighbors after
+    # aggregating this routers table.
+    def update(self, dic):
+        self.messages.append(dic)
+        self.table.append({'network': dic['msg']['network'], 'netmask': dic['msg']['netmask'], 'peer': dic['src'],
+                           'localpref': dic['msg']['localpref'], 'ASPath': dic['msg']['ASPath'],
+                           'selfOrigin': dic['msg']['selfOrigin'], 'origin': dic['msg']['origin']})
+        self.aggregate()
+        temp = copy.deepcopy(dic['msg'])
+        del temp['localpref']
+        del temp['origin']
+        del temp['selfOrigin']
+        temp['ASPath'].insert(0, self.asn)
+        if self.relations[dic['src']] == "cust":
             for neighbors in self.relations:
                 if dic['src'] != neighbors:
-                    self.send(neighbors, json.dumps({'msg': dic['msg'],
+                    self.send(neighbors, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                             'network': temp['network']},
                                                      'src': self.our_addr(neighbors),
-                                                     'dst': neighbors, 'type': 'withdraw'}))
-        if dic['type'] == "dump":
-            for neighbors in self.relations:
-                self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
-                                                 'msg': self.table}))
+                                                     'dst': neighbors, 'type': 'update'}))
+        else:
+            for customers in self.relations:
+                if dic['src'] != customers and self.relations[customers] == "cust":
+                    print("worked")
+                    print(self.relations[customers])
+                    self.send(customers, json.dumps({'msg': {'netmask': temp['netmask'], 'ASPath': temp['ASPath'],
+                                                             'network': temp['network']},
+                                                     'src': self.our_addr(customers),
+                                                     'dst': customers, 'type': 'update'}))
 
-        if dic['type'] == "data":
-            peer = []
+    # Handles the withdrawal of routes from our table as well as disaggregating and aggregating to account for the
+    # withdrawal.
+    def withdraw(self, dic):
+        self.messages.append(dic)
+        for x in self.table:
+            for y in dic['msg']:
+                if x['peer'] == dic['src'] and x['network'] == y['network']:
+                    self.table.remove(x)
+        self.disaggregate()
+        for neighbors in self.relations:
+            if dic['src'] != neighbors:
+                self.send(neighbors, json.dumps({'msg': dic['msg'],
+                                                 'src': self.our_addr(neighbors),
+                                                 'dst': neighbors, 'type': 'withdraw'}))
 
-            for net in self.table:
-                if dic['dst'][0: dic['dst'].find('.')] in net['network']:
-                    peer.append(net)
+    # Handles the forwarding of our routing table to this routers neighbors.
+    def dump(self, dic):
+        for neighbors in self.relations:
+            self.send(neighbors, json.dumps({'src': self.our_addr(neighbors), 'dst': neighbors, 'type': 'table',
+                                             'msg': self.table}))
+
+    # Handles data messages by checking for the best route in our forwarding table to send the data on by comparing
+    # their attributes. Also makes sure that the we are forwarding messages for paying customers exclusively.
+    def data(self, dic, srcif):
+        peer = []
+
+        for net in self.table:
+            if dic['dst'][0: dic['dst'].find('.')] in net['network']:
+                peer.append(net)
+
+        if len(peer) == 1:
+            self.checkPeer(peer, dic, srcif)
+        else:
+            temp = []
+            maxes = []
+            for p in peer:
+                maxes.append(SequenceMatcher(None, p['network'], dic['dst']).ratio())
+            indices = [j for j, y in enumerate(maxes) if y == max(maxes)]
+            for z in indices:
+                temp.append(peer[z])
+            peer = temp
 
             if len(peer) == 1:
-                if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (self.relations[
-                    peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
-                    self.send(peer[0]['peer'],
-                              json.dumps(
-                                  {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                   'dst': dic['dst']}))
+                self.checkPeer(peer, dic, srcif)
             else:
                 temp = []
                 maxes = []
                 for p in peer:
-                    maxes.append(SequenceMatcher(None, p['network'], dic['dst']).ratio())
+                    maxes.append(p['localpref'])
+
                 indices = [j for j, y in enumerate(maxes) if y == max(maxes)]
                 for z in indices:
                     temp.append(peer[z])
                 peer = temp
-
                 if len(peer) == 1:
-                    if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
-                            self.relations[
-                                peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
-                        self.send(peer[0]['peer'],
-                                  json.dumps(
-                                      {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                       'dst': dic['dst']}))
+                    self.checkPeer(peer, dic, srcif)
+
                 else:
                     temp = []
                     maxes = []
                     for p in peer:
-                        maxes.append(p['localpref'])
+                        maxes.append(p['selfOrigin'])
+                    if maxes.count(True) > 0:
+                        indices = [j for j, y in enumerate(maxes) if y == True]
+                        for z in indices:
+                            temp.append(peer[z])
+                        peer = temp
 
-                    indices = [j for j, y in enumerate(maxes) if y == max(maxes)]
-                    for z in indices:
-                        temp.append(peer[z])
-                    peer = temp
                     if len(peer) == 1:
-                        if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
-                                self.relations[
-                                    peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
-                            self.send(peer[0]['peer'],
-                                      json.dumps(
-                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                           'dst': dic['dst']}))
-
-
+                        self.checkPeer(peer, dic, srcif)
                     else:
                         temp = []
                         maxes = []
                         for p in peer:
-                            maxes.append(p['selfOrigin'])
-                        if maxes.count(True) > 0:
-                            indices = [j for j, y in enumerate(maxes) if y == True]
-                            for z in indices:
-                                temp.append(peer[z])
-                            peer = temp
+                            maxes.append(len(p['ASPath']))
+
+                        indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
+                        for z in indices:
+                            temp.append(peer[z])
+                        peer = temp
 
                         if len(peer) == 1:
-                            if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
-                                    self.relations[
-                                        peer[0]['peer']] == "peer" or self.relations[peer[0]['peer']] == "prov")):
-                                self.send(peer[0]['peer'],
-                                          json.dumps(
-                                              {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                               'dst': dic['dst']}))
+                            self.checkPeer(peer, dic, srcif)
                         else:
                             temp = []
                             maxes = []
                             for p in peer:
-                                maxes.append(len(p['ASPath']))
+                                maxes.append(p['origin'])
 
-                            indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
-                            for z in indices:
-                                temp.append(peer[z])
-                            peer = temp
-
+                            if maxes.count('IGP') > 0:
+                                indices = [j for j, y in enumerate(maxes) if y == 'IGP']
+                                for z in indices:
+                                    temp.append(peer[z])
+                                peer = temp
                             if len(peer) == 1:
-                                if not ((self.relations[srcif] == "peer" or self.relations[srcif] == "prov") and (
-                                        self.relations[
-                                            peer[0]['peer']] == "peer" or self.relations[
-                                            peer[0]['peer']] == "prov")):
-                                    self.send(peer[0]['peer'],
-                                              json.dumps(
-                                                  {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                                   'dst': dic['dst']}))
+                                self.checkPeer(peer, dic, srcif)
                             else:
-                                temp = []
-                                maxes = []
-                                for p in peer:
-                                    maxes.append(p['origin'])
-
-                                if maxes.count('IGP') > 0:
-                                    indices = [j for j, y in enumerate(maxes) if y == 'IGP']
+                                if maxes.count('EGP') > 0:
+                                    indices = [j for j, y in enumerate(maxes) if y == 'EGP']
                                     for z in indices:
                                         temp.append(peer[z])
                                     peer = temp
                                 if len(peer) == 1:
-                                    if not ((self.relations[srcif] == "peer" or self.relations[
-                                        srcif] == "prov") and (self.relations[
-                                                                       peer[0]['peer']] == "peer" or self.relations[
-                                                                       peer[0]['peer']] == "prov")):
-                                        self.send(peer[0]['peer'],
-                                                  json.dumps(
-                                                      {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                                       'dst': dic['dst']}))
+                                    self.checkPeer(peer, dic, srcif)
                                 else:
-                                    if maxes.count('EGP') > 0:
-                                        indices = [j for j, y in enumerate(maxes) if y == 'EGP']
-                                        for z in indices:
-                                            temp.append(peer[z])
-                                        peer = temp
-                                    if len(peer) == 1:
-                                        if not ((self.relations[srcif] == "peer" or self.relations[
-                                            srcif] == "prov") and (self.relations[
-                                                                           peer[0]['peer']] == "peer" or self.relations[
-                                                                           peer[0]['peer']] == "prov")):
-                                            self.send(peer[0]['peer'],
-                                                      json.dumps(
-                                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                                           'dst': dic['dst']}))
-                                    else:
-                                        maxes = []
-                                        temp = []
-                                        for p in peer:
-                                            quads = p['peer'].split('.')
-                                            maxes.append((int(quads[0]) << 24) + (int(quads[1]) << 16) +
-                                                         (int(quads[2]) << 8) + int(quads[3]))
+                                    maxes = []
+                                    temp = []
+                                    for p in peer:
+                                        quads = p['peer'].split('.')
+                                        maxes.append((int(quads[0]) << 24) + (int(quads[1]) << 16) +
+                                                     (int(quads[2]) << 8) + int(quads[3]))
 
-                                        indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
-                                        for z in indices:
-                                            temp.append(peer[z])
-                                        peer = temp
-                                        if not (self.relations[srcif] == "peer" or self.relations[
-                                            srcif] == "prov" and self.relations[peer[0]['peer']] == "peer" or
-                                                self.relations[peer[0]['peer']] == "prov"):
-                                            self.send(peer[0]['peer'],
-                                                      json.dumps(
-                                                          {'type': 'data', 'msg': dic['msg'], 'src': dic['src'],
-                                                           'dst': dic['dst']}))
+                                    indices = [j for j, y in enumerate(maxes) if y == min(maxes)]
+                                    for z in indices:
+                                        temp.append(peer[z])
+                                    peer = temp
+                                    self.checkPeer(peer, dic, srcif)
+
+    # Handles all messages received and performs different functions depending on the type of message received.
+    def processMsg(self, msg, srcif):
+        dic = json.loads(msg)
+        if dic['type'] == "update":
+            self.update(dic)
+
+        if dic['type'] == "withdraw":
+            self.withdraw(dic)
+
+        if dic['type'] == "dump":
+            self.dump(dic)
+
+        if dic['type'] == "data":
+            self.data(dic, srcif)
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
